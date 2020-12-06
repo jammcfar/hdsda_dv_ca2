@@ -1,0 +1,14 @@
+#+TITLE: Poverty dash
+
+* TODO
+1) Repair the join between map data and pov data
+2) Reduce down map data size
+3) Impute gini, median, gdp_capita, life_exp and pop
+4) Summarise all subregions (get the median) (if this is a thing, probably is)
+
+* Dataset
+- An attempt to normalise global absolute poverty across different economies
+- Well researched and referenced
+
+
+
