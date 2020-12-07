@@ -18,6 +18,12 @@ pov_dat <- povcalnet(
   fill_gaps = T,
   year = c(1980:2019)
 )
+povcal_extra <- povcalnet_info() %>% as_tibble()
+pov_extra_trim <- povcal_extra %>% select(country_code, wb_region) ## can also get more detailed region
+
+pov_dat <-
+  pov_dat %>%
+  left_join(pov_extra_trim, by = c(countrycode = "country_code"))
 
 ## and remove some stuff
 pov_dat <- pov_dat %>%
@@ -46,54 +52,78 @@ my_indicators <- c(
 
 wb_dat <- wb_data(my_indicators, start_date = 1980, end_date = 2019)
 
+## changed left join to right join
 dat_j <-
   pov_dat %>%
-  left_join(wb_dat, by = c("countrycode" = "iso3c", "year" = "date"))
+  right_join(wb_dat, by = c("countrycode" = "iso3c", "year" = "date"))
 
-## naniar::vis_miss(dat_j)
+## get coarse map data
+rwm_low <- fortify(rworldmap::countriesCoarseLessIslands) %>% as_tibble()
 
-
-## join ggplot2 stuff
-dat_world <- ggplot2::map_data("world")
-
-## alot match, but many dont. Will have to go in manually
-dat_world <- dat_world %>%
+rwm_names <- rworldmap::countrySynonyms %>%
   as_tibble() %>%
-  mutate(subregion = NA) %>%
-  filter(region != "Antarctica") %>%
-  arrange(region)
+  pivot_longer(name1:name8) %>%
+  filter(value != "")
 
-## map the map smaller
-map_json <- geojson_json(dat_world, geometry = "polygon", group = "group")
+rwm_tidy <-
+  rwm_low %>%
+  left_join(rwm_names, by = c("id" = "value")) %>%
+  mutate(ISO3 = str_to_upper(ISO3)) %>%
+  select(long, lat, id, group, ISO3)
 
-map_sp <- geojson_sp(map_json)
 
-map_simp <- ms_simplify(map_sp, keep = 0.05, keep_shapes = T)
+rwm_tidy %>%
+  ggplot(aes(x = long, y = lat, group = group)) +
+  geom_polygon(colour = "grey80", size = 0.5)
 
-coord_bits <- as_tibble(raster::geom(map_simp))
+dat_map <-
+  rwm_tidy %>%
+  left_join(dat_j, by = c("ISO3" = "countrycode")) %>%
+  filter(id != "Antarctica")
 
-world_reduce <-
-  as_tibble(map_simp) %>%
-  mutate(
-    group = as.numeric(trimws(group)),
-    order = as.numeric(trimws(order))
-  ) %>%
-  group_by(region) %>%
-  mutate(region_id = cur_group_id()) %>%
-  right_join(coord_bits, by = c(region_id = "object")) %>%
-  select(
-    long = x,
-    lat = y,
-    group,
-    order,
-    region,
-    subregion
-  )
+## this is all redundant now I think
+## deal with the ones who wouldnt gather data and have no years
+# no_dat_collect <-
+# dat_map %>%
+# filter(is.na(countryname), id != "Antarctica")
+#
+# years_available <- na.omit(unique(dat_map$year))
+#
+# nrow(no_dat_collect)
+#
+# for (i in 1:length(years_available)) {
+# no_dat_collect <-
+# no_dat_collect %>%
+# add_column(
+# x = years_available[i],
+# .name_repair = "unique"
+# )
+# }
+# no_dat_fix <-
+# no_dat_collect %>%
+# pivot_longer(cols = x...21:x...58) %>%
+# select(-year, -name) %>%
+# rename(year = "value")
+#
+# dat_map_fix <-
+# dat_map %>%
+# filter(!is.na(countryname)) %>%
+##  bind_rows(no_dat_fix) %>%
+# select(-countryname, -iso2c)
+#
+### no fill in for countries
+# dat_map_fix <-
+# dat_map_fix %>%
+# group_by(group) %>%
+# complete(year = 1981:2019, nesting(long, lat))
+#
+# dat_map_fix %>% filter(ISO3 == "SSD")
+# expand(dat_map_fix, nesting(group), year = 1981:2019)
 
 ## join up map data
-dat_map <-
-  world_reduce %>%
-  inner_join(dat_j, by = c("region" = "countryname"))
+# dat_map <-
+# world_reduce %>%
+# inner_join(dat_j, by = c("region" = "countryname"))
 
 write_csv(dat_map, "test_data_small.csv")
 
@@ -111,21 +141,17 @@ write_csv(dat_map, "test_data_small.csv")
 ## watts poverty measure
 
 ## this is test stuff
-pov_data <- read_csv("test_data.csv")
-
+pov_data <- read.csv("test_data_small.csv") %>% as_tibble()
 
 pov_data_go <- pov_data %>% filter(year == 2000)
 
 map_plot <-
   pov_data_go %>%
-  ggplot(aes(x = long, y = lat, group = group, text = country, fill = mean)) +
-  geom_polygon(colour = "grey80", size = 0.5)
+  ggplot(aes(x = long, y = lat, group = group, text = country, fill = headcount)) +
+  geom_polygon(colour = "grey80", size = 0.1) +
+  scale_fill_continuous(na.value = "grey70")
+map_plot
 
-plotly_test <- map_plot %>%
-  ggplotly() %>%
-  event_register("plotly_click")
-
-plotly_test
 
 # note curve number is position in list -1
 str_extract(plotly_test$x$data[[10]]$text, "[^<]+")
@@ -208,15 +234,15 @@ ui <- dashboardPage(
 server <- function(input, output) {
   set.seed(122)
   ## read in the data
-  pov_data <- read_csv("test_data_small.csv")
+  pov_data <- read.csv("test_data_small.csv") %>% as_tibble()
 
   output$plot1 <- renderPlotly({
     pov_data_go <- pov_data %>% filter(year == input$slider)
 
     map_plot <-
       pov_data_go %>%
-      ggplot(aes(x = long, y = lat, group = group, text = country, fill = headcount)) +
-      geom_polygon(colour = "grey80", size = 0.5)
+      ggplot(aes(x = long, y = lat, group = group, text = id, fill = headcount)) +
+      geom_polygon(colour = "grey80", size = 0.1)
 
 
     map_plotly <-
@@ -240,8 +266,8 @@ server <- function(input, output) {
 
     map_plot_2 <-
       pov_data_go_2 %>%
-      ggplot(aes(x = long, y = lat, group = group, text = country, fill = headcount)) +
-      geom_polygon(colour = "grey80", size = 0.5)
+      ggplot(aes(x = long, y = lat, group = group, text = id, fill = headcount)) +
+      geom_polygon(colour = "grey80", size = 0.1)
 
     map_plotly_2 <-
       map_plot_2 %>%
@@ -255,7 +281,7 @@ server <- function(input, output) {
       countries_vector[i] <- foo_country
     }
 
-    pov_data_hist <- pov_data_go_2 %>% filter(region %in% countries_vector)
+    pov_data_hist <- pov_data_go_2 %>% filter(id %in% countries_vector)
 
     hist(pov_data_hist$headcount)
   })
