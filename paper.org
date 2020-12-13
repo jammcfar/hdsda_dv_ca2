@@ -1,14 +1,48 @@
 #+TITLE: Poverty dash
 
 * TODO
-1) Repair the join between map data and pov data
-2) Reduce down map data size
-3) Impute gini, median, gdp_capita, life_exp and pop
-4) Summarise all subregions (get the median) (if this is a thing, probably is)
+1) Repair the join between map data and pov data DONE
+2) Reduce down map data size DONE
+3) Impute gini, median, gdp_capita, life_exp and pop DONEISH
+4) Summarise all subregions (get the median) (if this is a thing, probably is) WHAT IS THIS
+5) Find out in the literature on poverty what kind of things people analyse
 
-* Dataset
+* Background
 - An attempt to normalise global absolute poverty across different economies
-- Well researched and referenced
+- Well researched and referenced data sources
+
+* Specification and narrative
+- Poverty over time
+- Comparisons between countries
+- The association between poverty and other metrics
+
+  Poverty over time?
+  Poverty and urbanisation?
+  Poverty and inequality?
+  Poverty correlations with other measures for whole regions?
+  Poverty eradication and inequality as factors in carbon reduction:https://www.nature.com/articles/s41467-017-00919-4/
+
+  The view of poverty as being reduced globally is heavily dependent on the statistical basis http://citeseerx.ist.psu.edu/viewdoc/download?doi=10.1.1.561.5497&rep=rep1&type=pdf
 
 
+* Visual design process
+** Data preprocessing
+  Data was extracted using R based APIs
+- Some compromises had to be made, owing to the dataset size.
+  - Polygon counts were reduced
+  - Antarctica was removed
+  - Years were constrained to later than 1990. Before that had more missing data anyway that would need to be extrapolated.
+  - Some finer data such as population deciles were dropped.
+** Data visualisation
+Talk about composition (as in his slides) Lecture 10
+Wireframing
 
+Wanted the chloropleth to be the primary view
+Wanted to avoid multiple tabs
+To manage the volume of possible views, users were given control over years and ...
+
+* Independent visualisations (justifications)
+(for techniques, layout, style, colour)
+
+* Conclusions and reflections
+latency is bad https://idl.cs.washington.edu/files/2014-Latency-InfoVis.pdf
