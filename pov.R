@@ -1,11 +1,12 @@
 ### Title: povcar
 ### Author: x19175329@student.ncirl.ie
 ### Desc: r file
-
+library(formattable)
 library(tidyverse)
 library(povcalnetR)
 library(shiny)
 library(shinydashboard)
+library(shinycssloaders)
 library(plotly)
 library(wbstats)
 
@@ -76,7 +77,23 @@ dat_map <-
   rwm_tidy %>%
   left_join(dat_j, by = c("ISO3" = "countrycode")) %>%
   filter(id != "Antarctica")
-write_csv(dat_map, "test_data_small.csv")
+
+dat_map_rounded <-
+  dat_map %>%
+  select(-country, -iso2c, -pop) %>%
+  mutate(
+    headcount = round(headcount, 4),
+    gini = round(gini, 3),
+    watts = round(watts, 3),
+    life_exp = round(life_exp, 3),
+    purchase_power_parity = round(purchase_power_parity, 3),
+    ## median = round(median, 3),
+    gdp_capita = round(gdp_capita, 3),
+    povertygap = round(povertygap, 3)
+  ) %>%
+  filter(year != 2019)
+
+write_csv(dat_map_rounded, "test_data_small.csv")
 
 ## variables
 ## year
@@ -148,7 +165,7 @@ pov_dat_hist <- pov_dat_go %>% filter(pov_data_go %>% countries_vector())
 
 hist(pov_dat_hist)
 
-## shiny time
+## shiny time========================================================
 
 ani_opts <-
   animationOptions(
@@ -157,32 +174,23 @@ ani_opts <-
     pauseButton = "Pause"
   )
 
-## Sidebar content
-ui <- dashboardPage(
-  # disabling the header is an option
+d_header <- # disabling the header is an option
   dashboardHeader(
     title = "WB Poverty dashboard",
     titleWidth = 450
-  ),
+  )
+
+d_sidebar <-
   dashboardSidebar(sidebarMenu(
     menuItem("Dashboard", tabName = "dashboard", icon = icon("dashboard")),
-    menuItem("Widgets", tabName = "widgets", icon = icon("th")),
     "Why not choose\nsome options",
     br(),
     sliderInput("slider", "Year:",
       min = 1990,
-      max = 2019,
+      max = 2018,
       value = 1990,
       animate = ani_opts
     ),
-    # dateRangeInput("daterange", "Select years:",
-    # startview = "decade",
-    # start = "1967",
-    # end = "2019",
-    # min = "1967",
-    # max = "2019"
-    # ),
-    ## textInput("text", "Text input:")
     selectInput(
       "var_primary", "Primary variable:",
       c(
@@ -201,47 +209,73 @@ ui <- dashboardPage(
         "Gini Inequality Index" = "gini",
         "Life expectancy" = "life_exp",
         "GDP per capita" = "gdp_capita"
-      )
+      ),
+      selected = "gini"
     ),
-
+    actionButton(
+      "reset_butt",
+      "Clear drilldown",
+      icon = icon("trash-alt")
+    ),
     tableOutput("data")
-  )),
+  ))
+
+## Sidebar content
+ui <- dashboardPage(
+  d_header,
+  d_sidebar,
   dashboardBody(
     # Boxes need to be put in a row (or column) tabItems(
     fluidRow(
-      box(
-        title = "World map",
-        status = "primary",
-        solidHeader = TRUE,
-        background = "light-blue",
-        plotlyOutput("plot1", height = 600)
+      column(
+        width = 5,
+        box(
+          valueBoxOutput("worldMedian"),
+          valueBoxOutput("worldBottom"),
+          valueBoxOutput("worldTop"),
+          width = NULL
+        ),
+        box(
+          title = "World map",
+          status = "primary",
+          solidHeader = TRUE,
+          background = "light-blue",
+          withSpinner(plotlyOutput("plot1")),
+          width = NULL
+        ),
+        box(
+          title = "Gapminder",
+          solidHeader = TRUE,
+          background = "light-blue",
+          plotlyOutput("gmplot", height = 600),
+          width = NULL
+        )
       ),
-      box(
-        title = "Gapminder",
-        solidHeader = TRUE,
-        background = "light-blue",
-        plotlyOutput("gmplot", height = 600)
-      )
-    ),
-    fluidRow(
-      box(
-        title = "Country data",
-        solidHeader = T
+      column(
+        width = 5,
+        box(
+          title = "Selected countries: All years for primary variable",
+          solidHeader = T,
+          plotlyOutput("plot2", height = 300),
+          width = NULL
+        ),
+        box(
+          title = "Selected countries: all variables for selected year",
+          solidHeader = T,
+          tableOutput("clickTable"),
+          width = NULL
+        ),
+        box(
+          title = "debug",
+          verbatimTextOutput("clicking"),
+          width = NULL
+        )
       ),
-      box(
-        title = "Line graph",
-        solidHeader = T,
-        plotlyOutput("plot2", height = 300)
-      ),
-      box(
-        title = "debug",
-        verbatimTextOutput("clicking")
-      )
     )
   )
 )
 
-server <- function(input, output) {
+server <- function(input, output, session) {
   set.seed(122)
   ## read in the data
   pov_data <- read.csv("test_data_small.csv") %>% as_tibble()
@@ -249,8 +283,15 @@ server <- function(input, output) {
   ## transform to non-map data
   pov_data_nomap <-
     pov_data %>%
-    group_by(group, year) %>%
+    group_by(id, year) %>%
     slice_head(n = 1)
+
+  ## create dummy data for empty line plot
+  dummy_data <- tibble(
+    year = c(1990, 2004, 2018),
+    y_var = c(0, 0.5, 1),
+    note = c(NA, "Click countries on the map\nto activate drilldowns", NA)
+  )
 
   ## create a reactive object to pass elsewhere
   map_r <- reactive({
@@ -261,36 +302,105 @@ server <- function(input, output) {
       ggplot(aes(x = long, y = lat, group = group, text = id)) +
       geom_polygon(aes_string(fill = input$var_primary), colour = "grey80", size = 0.1)
 
-    map_plotly <- ggplotly(map_plot)
+    map_plotly <- ggplotly(map_plot, height = 400)
 
     map_plotly
   })
 
-  output$plot1 <- renderPlotly({
-    # pov_data_go <- pov_data %>% filter(year == input$slider)
-    #
-    # map_plot <-
-    # pov_data_go %>%
-    # ggplot(aes(x = long, y = lat, group = group, text = id)) +
-    # geom_polygon(aes_string(fill = input$var_primary), colour = "grey80", size = 0.1)
-    #
-    # map_plotly <- ggplotly(map_plot)
-    map_r() %>% event_register("plotly_click")
-    ## map_data
+  # data for summary boxes; min, max and median
+  sum_dat_r <- reactive({
+    pov_dat_4_summs <- pov_data_nomap %>% filter(year == input$slider)
 
-    # map_plotly <- plot_geo(pov_data_go)
-    # map_plotly <- map_plotly %>% add_trace(
-    # z = ~headcount, text = ~id, color = ~headcount, locations = ~ISO3, colors = "Purples"
-    # )
+    foo_prim <- input$var_primary
 
-    # highlight_key() # this might be the answer
-    # highligh deosnt seem to work
-    # highlight(map_plotly,
-    # on = "plotly_click",
-    # color = toRGB("red")
-    # ) %>%
-    # event_register("plotly_click")
+    pov_dat_summs_sel <- pov_dat_4_summs[c("id", foo_prim)]
+
+    colnames(pov_dat_summs_sel) <- c("id", "var2")
+
+    ## this might have trouble with duplicates, be careful
+    pov_min_max <-
+      pov_dat_summs_sel %>%
+      ungroup() %>%
+      summarise(
+        min_id = id[which.min(var2)],
+        min_val = min(var2, na.rm = T),
+        max_id = id[which.max(var2)],
+        max_val = max(var2, na.rm = T),
+        .groups = NULL
+      )
+
+    get_med <- median(pov_dat_summs_sel$var2, na.rm = T)
+
+    pov_min_max$med <- get_med
+
+    pov_min_max
+    # pov_dat_summs_sel %>%
+    # slice_min(order_by = var2, with_ties = F, n = 1) %>%
+    # select(id) %>%
+    # as_vector()
   })
+
+  # output for the plot
+  output$plot1 <- renderPlotly({
+    map_r() %>% event_register("plotly_click")
+  })
+
+  ## valuebox output
+  output$worldMedian <- renderValueBox({
+    foo_prim <- input$var_primary
+
+    foo_summ <- sum_dat_r()
+
+    valueBox(
+      paste(foo_summ[1, 5]), "Global median",
+      icon = icon("globe-africa"), color = "purple"
+    )
+  })
+
+  output$worldBottom <- renderValueBox({
+    foo_prim <- input$var_primary
+
+    foo_summ <- sum_dat_r()
+
+    valueBox(
+      paste(foo_summ[1, 2]), paste0("Lowest (", foo_summ[1, 1], ")"),
+      icon = icon("arrow-alt-circle-down"), color = "purple"
+    )
+  })
+
+  output$worldTop <- renderValueBox({
+    foo_prim <- input$var_primary
+
+    foo_summ <- sum_dat_r()
+
+    valueBox(
+      paste(foo_summ[1, 4]), paste0("Highest (", foo_summ[1, 3], ")"),
+      icon = icon("arrow-alt-circle-up"), color = "purple"
+    )
+  })
+  ## save the plotly clicks to a list
+  click_vals <- reactiveValues(dList = NULL)
+
+  ## and add the clicked countries to a list
+  observe({
+    if (length(event_data("plotly_click")) > 0 & length(isolate(click_vals$dList)) < 8) {
+      d <- event_data("plotly_click")
+
+      foo_curve <- d$curveNumber[1] + 1
+      foo_country <- str_extract(map_r()$x$data[[foo_curve]]$text, "[^>]*$")
+
+      # only add if not already present
+      if (!(foo_country %in% click_vals$dList)) {
+        click_vals$dList <- c(isolate(click_vals$dList), foo_country)
+      }
+    }
+  })
+
+  ## clear the drilldown if the year or metric is changed (There might be a way to preserve this though)
+  observeEvent(input$slider, {
+    click_vals$dList <- NULL
+  })
+
 
   # gapminder style visual
   output$gmplot <- renderPlotly({
@@ -309,61 +419,62 @@ server <- function(input, output) {
 
   # line plot over year
   output$plot2 <- renderPlotly({
-    d <- event_data("plotly_click")
+    if (length(click_vals$dList) > 0) {
+      pov_data_line <- pov_data_nomap %>% filter(id %in% click_vals$dList)
 
-    # pov_data_go_2 <- pov_data %>% filter(year == input$slider)
-    #
-    # map_plot_2 <-
-    # pov_data_go_2 %>%
-    # ggplot(aes(x = long, y = lat, group = group, text = id)) +
-    # geom_polygon(aes_string(fill = input$var_primary))
-    #
-    # map_plotly_2 <-
-    # map_plot_2 %>%
-    # ggplotly()
+      line_plot <-
+        ggplot(
+          pov_data_line,
+          aes_string(y = input$var_primary)
+        ) +
+        geom_line(aes(x = year, colour = id)) +
+        geom_vline(xintercept = input$slider, linetype = "longdash")
 
+      ggplotly(line_plot) %>% event_unregister("plotly_click")
+    } else {
+      line_plot <-
+        ggplot(dummy_data, aes(x = year, y = y_var)) +
+        geom_text(aes(label = note))
 
-    ## extract out the clicked country (I think)
-    countries_vector <- c()
-
-    for (i in 1:length(d)) {
-      foo_curve <- d$curveNumber[i] + 1
-      foo_country <- str_extract(map_r()$x$data[[foo_curve]]$text, "[^>]*$")
-      countries_vector[i] <- foo_country
+      ggplotly(line_plot) %>% event_unregister("plotly_click")
     }
-
-    pov_data_line <- pov_data_nomap %>% filter(id %in% countries_vector)
-
-    line_plot <-
-      ggplot(
-        pov_data_line,
-        aes_string(y = input$var_primary)
-      ) +
-      geom_line(aes(x = year, colour = id))
-
-    ggplotly(line_plot) %>% event_unregister("plotly_click")
   })
 
+  # table country data
+  output$clickTable <- renderTable({
+    pov_data_table <- pov_data_nomap %>% filter(
+      id %in% click_vals$dList,
+      year == input$slider
+    )
+
+    pov_data_table %>%
+      select(id, headcount, watts, gini, gdp_capita, life_exp, population)
+  })
+
+  ## reset the drilldown
+  observeEvent(input$reset_butt, {
+    click_vals$dList <- NULL
+  })
+
+  observeEvent(input$var_primary, {
+    click_vals$dList <- NULL
+  })
+
+  # this is for debugging
   output$clicking <- renderPrint({
-    d <- event_data("plotly_click")
-    txt <- input$var_primary
-
-    paste(d, txt)
-
-    ## hist(df_select$mean)
+    sum_dat_r()
   })
-  # output$table1 <- renderTable({
-  # d <- event_data("plotly_click")
-  # if (is.null(d)) "Click events appear here (double-click to clear)" else d
-  # })
 
-  ## output$table1
-
-  ## output$plot2 <- renderPlot({
+  ## close app when closing browser tab
+  session$onSessionEnded(stopApp)
 }
 
 s_dash <- shinyApp(ui, server)
 s_dash
+
+
+## formattable experiments
+
 
 
 ## experiments
@@ -373,3 +484,50 @@ s_dash
 # ) %>% partial_bundle()
 # fig2
 # df <- read_csv('https://raw.githubusercontent.com/plotly/datasets/master/2014_world_gdp_with_codes.csv')
+
+# test <- tibble(
+# x = c("a", "aa", "a", "b", "b", "b", "c", "c", "c"),
+# y = c(1, 1:8)
+# )
+#
+# test %>%
+# summarise(
+# min = min(y),
+# minName = x[which.max(y)]
+# )
+#
+#
+# test %>%
+# summarise(
+# min_id = x[which.min(y)],
+# min_val = min(y, na.rm = T),
+# max_id = x[which.max(y)],
+# max = max(y, na.rm = T)
+# )
+unique(pov_dat$year)
+pov_dat %>% filter(year == 1990) -> pov_data_go
+colnames(pov_data_go)[1] <- "id"
+foo_prim <- "headcount"
+
+pov_dat_summs_sel <- pov_data_go[c("id", foo_prim)]
+
+colnames(pov_dat_summs_sel) <- c("id", "var2")
+
+## this might have trouble with duplicates, be careful
+pov_min_max <-
+  pov_dat_summs_sel %>%
+  summarise(
+    min_id = id[which.min(var2)],
+    min_val = min(var2, na.rm = T),
+    max_id = id[which.max(var2)],
+    max = max(var2, na.rm = T)
+  )
+
+get_med <- median(pov_dat_summs_sel$var2, na.rm = T)
+
+pov_min_max$med <- get_med
+
+pov_dat_summs_sel %>%
+  slice_min(order_by = var2, with_ties = F, n = 1) %>%
+  select(id) %>%
+  as_vector()
