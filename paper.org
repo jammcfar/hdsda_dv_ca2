@@ -33,6 +33,9 @@
   - Antarctica was removed
   - Years were constrained to later than 1990. Before that had more missing data anyway that would need to be extrapolated.
   - Some finer data such as population deciles were dropped.
+
+Some manual hard coding was used to join up datasets. Even established codes like ISO3 can differ between datasets. X on used WB, other ISO3, still errors.
+
 ** Data visualisation
 Talk about composition (as in his slides) Lecture 10
 Wireframing
@@ -40,7 +43,7 @@ Wireframing
 Wanted the chloropleth to be the primary view
 Wanted to avoid multiple tabs
 To manage the volume of possible views, users were given control over years and ...
-
+https://sashamaps.net/docs/resources/20-colors/
 * Independent visualisations (justifications)
 (for techniques, layout, style, colour)
 
