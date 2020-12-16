@@ -113,21 +113,23 @@ d_sidebar <-
     selectInput(
       "var_primary", "Primary variable:",
       c(
-        "Extreme poverty %" = "headcount",
+        "Extreme poverty %" = "per_pov_line",
         "Watt's Poverty Index" = "watts",
         "Gini Inequality Index" = "gini",
         "Life expectancy" = "life_exp",
-        "GDP per capita" = "gdp_capita"
+        "GDP per capita" = "gdp",
+        "Purchase power parity" = "ppp"
       )
     ),
     selectInput(
       "var_secondary", "Secondary variable",
       c(
-        "Extreme poverty %" = "headcount",
+        "Extreme poverty %" = "per_pov_line",
         "Watt's Poverty Index" = "watts",
         "Gini Inequality Index" = "gini",
         "Life expectancy" = "life_exp",
-        "GDP per capita" = "gdp_capita"
+        "GDP per capita" = "gdp",
+        "Purchase power parity" = "ppp"
       ),
       selected = "gini"
     ),
@@ -194,28 +196,28 @@ server <- function(input, output, session) {
   cus_cols <- c("#e6194B", "#3cb44b", "#4363d8", "#f58231", "#42d4f4", "#f032e6", "#800000", "#000075")
 
   ## read in the data
-  pov_data <- read.csv("test_data_small.csv") %>% as_tibble()
+  pov_data <- read_csv("test_data_small.csv", col_types = "ddcccdddddddcdd") %>% as_tibble()
 
   ## transform to non-map data
   pov_data_nomap <-
     pov_data %>%
-    group_by(id, year) %>%
+    group_by(Country, Year) %>%
     slice_head(n = 1)
 
   ## create dummy data for empty line plot
   dummy_data <- tibble(
-    year = c(1990, 2004, 2018),
+    Year = c(1990, 2004, 2018),
     y_var = c(0, 0.5, 1),
-    note = c(NA, "Click countries on the map\nto activate drilldowns", NA)
+    note = c(NA, "Click countries on the map to activate drilldowns", NA)
   )
 
   ## create a reactive object to pass elsewhere
   map_r <- reactive({
-    pov_data_go <- pov_data %>% filter(year == input$slider)
+    pov_data_go <- pov_data %>% filter(Year == input$slider)
 
     map_plot <-
       pov_data_go %>%
-      ggplot(aes(x = long, y = lat, group = group, text = id)) +
+      ggplot(aes(x = long, y = lat, group = group, text = Country)) +
       geom_polygon(aes_string(fill = input$var_primary), colour = "grey80", size = 0.1) +
       theme_classic() +
       theme(
@@ -232,22 +234,22 @@ server <- function(input, output, session) {
 
   # data for summary boxes; min, max and median
   sum_dat_r <- reactive({
-    pov_dat_4_summs <- pov_data_nomap %>% filter(year == input$slider)
+    pov_dat_4_summs <- pov_data_nomap %>% filter(Year == input$slider)
 
     foo_prim <- input$var_primary
 
-    pov_dat_summs_sel <- pov_dat_4_summs[c("id", foo_prim)]
+    pov_dat_summs_sel <- pov_dat_4_summs[c("Country", foo_prim)]
 
-    colnames(pov_dat_summs_sel) <- c("id", "var2")
+    colnames(pov_dat_summs_sel) <- c("Country", "var2")
 
     ## this might have trouble with duplicates, be careful
     pov_min_max <-
       pov_dat_summs_sel %>%
       ungroup() %>%
       summarise(
-        min_id = id[which.min(var2)],
+        min_id = Country[which.min(var2)],
         min_val = min(var2, na.rm = T),
-        max_id = id[which.max(var2)],
+        max_id = Country[which.max(var2)],
         max_val = max(var2, na.rm = T),
         .groups = NULL
       )
@@ -334,15 +336,15 @@ server <- function(input, output, session) {
 
   ## gapminder style visual, first create a reactive object
   gap_r <- reactive({
-    data_gm <- pov_data_nomap %>% filter(year == input$slider)
+    data_gm <- pov_data_nomap %>% filter(Year == input$slider)
 
     wb_plot <-
       ggplot(data_gm, aes_string(
         x = input$var_primary,
         y = input$var_secondary,
-        text = "id"
+        text = "Country"
       )) +
-      geom_point(aes(colour = wb_region, size = population)) +
+      geom_point(aes(colour = Region, size = pop_mm)) +
       scale_colour_manual(values = cus_cols, na.translate = F) +
       theme_classic() +
       theme(legend.title = element_blank())
@@ -358,14 +360,14 @@ server <- function(input, output, session) {
   # line plot over year
   output$plot2 <- renderPlotly({
     if (length(click_vals$dList) > 0) {
-      pov_data_line <- pov_data_nomap %>% filter(id %in% click_vals$dList)
+      pov_data_line <- pov_data_nomap %>% filter(Country %in% click_vals$dList)
 
       line_plot <-
         ggplot(
           pov_data_line,
           aes_string(y = input$var_primary)
         ) +
-        geom_line(aes(x = year, colour = id)) +
+        geom_line(aes(x = Year, colour = Country)) +
         geom_vline(xintercept = input$slider, linetype = "longdash", colour = "grey30") +
         scale_colour_manual(values = cus_cols) +
         theme_classic() +
@@ -374,7 +376,7 @@ server <- function(input, output, session) {
       ggplotly(line_plot) %>% event_unregister("plotly_click")
     } else {
       line_plot <-
-        ggplot(dummy_data, aes(x = year, y = y_var)) +
+        ggplot(dummy_data, aes(x = Year, y = y_var)) +
         geom_text(aes(label = note)) +
         theme_classic() +
         theme(legend.title = element_blank())
@@ -386,13 +388,22 @@ server <- function(input, output, session) {
   # table country data
   output$clickTable <- renderTable({
     foo_data_table <- pov_data_nomap %>% filter(
-      id %in% click_vals$dList,
-      year == input$slider
+      Country %in% click_vals$dList,
+      Year == input$slider
     )
     data_table_out <-
       foo_data_table %>%
       ungroup() %>%
-      select(id, headcount, watts, gini, gdp_capita, life_exp, population)
+      select(
+        Country,
+        "Percent below poverty line" = "per_pov_line",
+        "Watt's index" = "watts",
+        "Gini index" = "gini",
+        "GDP per capita" = "gdp",
+        "Life expectancy (years)" = "life_exp",
+        "Population (MM)" = "pop_mm",
+        "Purchase power parity" = "ppp"
+      )
 
     data_table_out
   })

@@ -5,21 +5,33 @@
 library(tidyverse)
 library(povcalnetR)
 library(wbstats)
+library(countrycode)
 
 ## import poverty data
 pov_dat <- povcalnet(
   fill_gaps = T,
   year = c(1990:2018)
 )
-povcal_extra <- povcalnet_info() %>% as_tibble()
-pov_extra_trim <- povcal_extra %>% select(country_code, wb_region) ## can also get more detailed region
 
-pov_dat <-
+## duplicates for covertype exist. Prioritise N and A.
+pov_dat_slice <-
   pov_dat %>%
+  group_by(countrycode, year) %>%
+  arrange(countrycode, year, coveragetype) %>%
+  slice_head(n = 1)
+
+## get more detailed region
+povcal_extra <- povcalnet_info() %>% as_tibble()
+pov_extra_trim <- povcal_extra %>%
+  select(country_code, wb_region) %>%
+  unique()
+
+pov_dat_se <-
+  pov_dat_slice %>%
   left_join(pov_extra_trim, by = c(countrycode = "country_code"))
 
 ## and remove some stuff
-pov_dat <- pov_dat %>%
+pov_dat_se <- pov_dat_se %>%
   select(
     -isinterpolated,
     -usemicrodata,
@@ -36,7 +48,7 @@ pov_dat <- pov_dat %>%
   ) %>%
   rename(purchase_power_parity = ppp)
 
-## code ripped from https://github.com/nset-ornl/wbstats
+## code help from https://github.com/nset-ornl/wbstats
 my_indicators <- c(
   life_exp = "SP.DYN.LE00.IN",
   gdp_capita = "NY.GDP.PCAP.CD",
@@ -45,9 +57,39 @@ my_indicators <- c(
 
 wb_dat <- wb_data(my_indicators, start_date = 1990, end_date = 2018)
 
+## convert to iso3 on both datasets and repair things
+pov_dat_se$countrycode <-
+  countrycode(
+    sourcevar = pov_dat_se$countrycode,
+    origin = "wb",
+    destination = "iso3c"
+  )
+
+pov_dat_se <-
+  pov_dat_se %>%
+  mutate(countrycode = case_when(
+    countryname == "Kosovo" ~ "XKX",
+    TRUE ~ countrycode
+  ))
+
+wb_dat$iso3c <-
+  countrycode(
+    sourcevar = wb_dat$iso3c,
+    origin = "wb",
+    destination = "iso3c"
+  )
+
+wb_dat <-
+  wb_dat %>%
+  mutate(iso3c = case_when(
+    country == "Kosovo" ~ "XKX",
+    country == "Channel Islands" ~ "CHI",
+    TRUE ~ iso3c
+  ))
+
 ## changed left join to right join
 dat_j <-
-  pov_dat %>%
+  pov_dat_se %>%
   right_join(wb_dat, by = c("countrycode" = "iso3c", "year" = "date"))
 
 ## get coarse map data
@@ -64,10 +106,38 @@ rwm_tidy <-
   mutate(ISO3 = str_to_upper(ISO3)) %>%
   select(long, lat, id, group, ISO3)
 
+# fix these disputed territories or having no iso codes
+rwm_tidy_filled <-
+  rwm_tidy %>%
+  mutate(ISO3 = case_when(
+    id == "Falkland Islands" ~ "GBR",
+    id == "Northern Cyprus" ~ "CYP",
+    id == "Somaliland" ~ "SOM",
+    id == "Republic of Serbia" ~ "SRB",
+    id == "Kosovo" ~ "XKX",
+    TRUE ~ ISO3
+  ))
+
+# convert the wb codes to ISO3
+dat_j$countrycode <-
+  countrycode(
+    sourcevar = dat_j$countrycode,
+    origin = "wb",
+    destination = "iso3c"
+  )
+
+dat_j_fix <-
+  dat_j %>%
+  mutate(countrycode = case_when(
+    country == "Kosovo" ~ "XKX",
+    country == "Channel Islands" ~ "CHI",
+    TRUE ~ countrycode
+  ))
+
 dat_map <-
   rwm_tidy %>%
   left_join(dat_j, by = c("ISO3" = "countrycode")) %>%
-  filter(id != "Antarctica")
+  filter(!(ISO3 %in% c("ATA", "ATF")))
 
 dat_map_rounded <-
   dat_map %>%
@@ -83,70 +153,22 @@ dat_map_rounded <-
     povertygap = round(povertygap, 3)
   )
 
-dat_map_rounded %>%
-  group_by(id, year) %>%
-  slice_head(n = 10) %>%
-  filter(is.na(wb_region)) %>%
-  ungroup() %>%
-  select(id) %>%
-  unique() %>%
-  as_vector()
 
 # fix the missing data problems
 dat_map_named <-
   dat_map_rounded %>%
   rename(
     Country = id,
-    "Purchase\npower parity" = purchase_power_parity,
-    "% below\npoverty line" = headcount,
-    "Mean distance\nbelow poverty line" = povertygap,
-    "Watt's index" = watts,
-    "Gini index" = gini,
-    "Population (MM)" = population,
+    Year = year,
+    "ppp" = purchase_power_parity,
+    "per_pov_line" = headcount,
+    "pov_gap" = povertygap,
+    "watts" = watts,
+    "gini" = gini,
+    "pop_mm" = population,
     "Region" = wb_region,
-    "GDP per\ncapita" = gdp_capita,
-    "Life\nexpectancy" = life_exp
+    "gdp" = gdp_capita,
+    "life_exp" = life_exp
   )
 
-write_csv(dat_map_rounded, "test_data_small.csv")
-
-## experiments
-
-map_isos <- sort(unique(rwm_tidy$ISO3))
-wb_isos <- sort(unique(dat_j$countrycode))
-
-wb_miss <- setdiff(map_isos, wb_isos) ## what is in map thats not in wb
-map_miss <- setdiff(wb_isos, map_isos)
-
-rwm_tidy %>%
-  filter(ISO3 %in% wb_miss) %>%
-  select(id, ISO3) %>%
-  unique() %>%
-  arrange(id)
-
-dat_j %>%
-  filter(countrycode %in% map_miss) %>%
-  select(countryname, countrycode) %>%
-  unique() %>%
-  arrange(countrycode)
-
-library(countrycode)
-
-codelist
-countrycode(
-  sourcevar = wb_isos,
-  origin = "wb",
-  destination = "iso3c"
-)
-
-countrycode(
-  sourcevar = pov_extra_trim$country_code,
-  origin = "wb",
-  destination = "iso3c"
-)
-
-guess_field(pov_extra_trim$country_code, min_similarity = 80)
-
-guess_field(rwm_tidy$ISO3, min_similarity = 80)
-
-guess_field(dat_j$countrycode, min_similarity = 80)
+write_csv(dat_map_named, "test_data_small.csv")
