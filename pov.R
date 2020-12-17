@@ -7,11 +7,12 @@ library(shiny)
 library(shinydashboard)
 library(shinycssloaders)
 library(plotly)
+library(shinyalert)
 
 ## this is test stuff
 pov_data <- read.csv("test_data_small.csv") %>% as_tibble()
 
-pov_data_go <- pov_data %>% filter(year == 2000)
+pov_data_go <- pov_data %>% filter(Year == 2000)
 
 map_plot <-
   pov_data_go %>%
@@ -69,7 +70,7 @@ hist(pov_dat_hist)
 # gapminder testing
 gap_dat_test <-
   pov_data_go %>%
-  group_by(id, year) %>%
+  group_by(Country, Year) %>%
   slice_head(n = 1)
 
 wb_plot <-
@@ -81,8 +82,25 @@ wb_plot <-
   geom_point(aes(colour = wb_region, size = population)) +
   scale_colour_manual(values = cus_cols, na.translate = F)
 
-plotly_test <- ggplotly(wb_plot, tooltip = c("text", "colour", "size"))
+x_var <- "tester"
+y_var <- "testere"
 
+cus_cols <- c("#e6194B", "#3cb44b", "#4363d8", "#f58231", "#42d4f4", "#f032e6", "#800000", "#000075")
+wb_plot <-
+  ggplot(gap_dat_test, aes_string(
+    x = "per_pov_line",
+    y = "gini",
+    text = "Country"
+  )) +
+  geom_point(aes(colour = Region, size = pop_mm), alpha = 0.8) +
+  scale_colour_manual(values = cus_cols, na.translate = F) +
+  theme_classic() +
+  theme(legend.title = element_blank()) +
+  labs(x = paste(x_var), y = paste(y_var))
+
+plotly_test <- ggplotly(wb_plot, tooltip = c("text", "colour", "size"))
+plotly_test$x$data[[3]]
+str_extract(plotly_test$x$data[[2]]$text[16], "[^>]*$")
 plotly_test
 
 ## shiny time========================================================
@@ -99,48 +117,55 @@ d_header <- # disabling the header is an option
     title = "PovcalNet DB"
   )
 
+## set up side panel. Enable shinyalert for help popup.
 d_sidebar <-
-  dashboardSidebar(sidebarMenu(
-    menuItem("Controls", tabName = "dashboard", icon = icon("dashboard")),
-    br(),
-    sliderInput("slider", "Year:",
-      min = 1990,
-      max = 2018,
-      value = 1990,
-      sep = "",
-      animate = ani_opts
-    ),
-    selectInput(
-      "var_primary", "Primary variable:",
-      c(
-        "Extreme poverty %" = "per_pov_line",
-        "Watt's Poverty Index" = "watts",
-        "Gini Inequality Index" = "gini",
-        "Life expectancy" = "life_exp",
-        "GDP per capita" = "gdp",
-        "Purchase power parity" = "ppp"
-      )
-    ),
-    selectInput(
-      "var_secondary", "Secondary variable",
-      c(
-        "Extreme poverty %" = "per_pov_line",
-        "Watt's Poverty Index" = "watts",
-        "Gini Inequality Index" = "gini",
-        "Life expectancy" = "life_exp",
-        "GDP per capita" = "gdp",
-        "Purchase power parity" = "ppp"
+  dashboardSidebar(
+    useShinyalert(),
+    sidebarMenu(
+      menuItem("Controls", tabName = "dashboard", icon = icon("dashboard")),
+      actionButton("help",
+        "Info",
+        icon = icon("info-circle")
       ),
-      selected = "gini"
-    ),
-    br(),
-    actionButton(
-      "reset_butt",
-      "Clear drilldown",
-      icon = icon("trash-alt")
-    ),
-    tableOutput("data")
-  ))
+      br(),
+      sliderInput("slider", "Year:",
+        min = 1990,
+        max = 2018,
+        value = 1990,
+        sep = "",
+        animate = ani_opts
+      ),
+      selectInput(
+        "var_primary", "Primary variable:",
+        c(
+          "Precent below poverty line" = "per_pov_line",
+          "Watt's Poverty Index" = "watts",
+          "Gini Inequality Index" = "gini",
+          "Life expectancy" = "life_exp",
+          "GDP per capita" = "gdp",
+          "Purchase power parity" = "ppp"
+        )
+      ),
+      selectInput(
+        "var_secondary", "Secondary variable",
+        c(
+          "Extreme poverty %" = "per_pov_line",
+          "Watt's Poverty Index" = "watts",
+          "Gini Inequality Index" = "gini",
+          "Life expectancy" = "life_exp",
+          "GDP per capita" = "gdp",
+          "Purchase power parity" = "ppp"
+        ),
+        selected = "gini"
+      ),
+      br(),
+      actionButton(
+        "reset_butt",
+        "Clear drilldown",
+        icon = icon("trash-alt")
+      )
+    )
+  )
 
 ## Sidebar content
 ui <- dashboardPage(
@@ -176,7 +201,7 @@ ui <- dashboardPage(
         box(
           title = "Selected countries: all variables for selected year",
           solidHeader = T,
-          tableOutput("clickTable"),
+          formattableOutput("clickTable"),
           width = NULL
         ),
         box(
@@ -184,7 +209,7 @@ ui <- dashboardPage(
           verbatimTextOutput("clicking"),
           width = NULL
         )
-      ),
+      )
     )
   )
 )
@@ -208,23 +233,53 @@ server <- function(input, output, session) {
   dummy_data <- tibble(
     Year = c(1990, 2004, 2018),
     y_var = c(0, 0.5, 1),
-    note = c(NA, "Click countries on the map to activate drilldowns", NA)
+    note = c(
+      NA,
+      "Click countries on the map to activate drilldowns.\nUp to 8 may be selected.\nNote that adjusting the slider or primary\nvariable will reset the drilldowns",
+      NA
+    )
   )
+
+  ## create a vector to substitute labels on graphs
+  metrics_sub_v <-
+    c(
+      "Percent below\npoverty line" = "per_pov_line",
+      "Watt's index" = "watts",
+      "Gini index" = "gini",
+      "GDP per\ncapita" = "gdp",
+      "Life\nexpectancy\n(years)" = "life_exp",
+      "Population\n(MM)" = "pop_mm",
+      "Purchase\npower parity" = "ppp"
+    )
+
+  ## create a reactive variable for plotly click
+  ## this allows it to be cleared properly by reset button, etc.
+  click_data <- reactiveValues(e = NULL)
+
+  observe({
+    click_data$e <- event_data("plotly_click")
+  })
 
   ## create a reactive object to pass elsewhere
   map_r <- reactive({
     pov_data_go <- pov_data %>% filter(Year == input$slider)
 
+    fill_var <- names(which(metrics_sub_v == input$var_primary))
+
     map_plot <-
       pov_data_go %>%
       ggplot(aes(x = long, y = lat, group = group, text = Country)) +
-      geom_polygon(aes_string(fill = input$var_primary), colour = "grey80", size = 0.1) +
+      geom_polygon(aes_string(fill = input$var_primary), colour = "grey90", size = 0.1) +
       theme_classic() +
       theme(
         axis.title = element_blank(),
         axis.text = element_blank(),
         axis.line = element_blank(),
         axis.ticks = element_blank()
+      ) +
+      scale_fill_gradientn(
+        name = paste(fill_var),
+        colors = c("#ABCEE2", "#3C8DBC", "#193C50")
       )
 
     map_plotly <- ggplotly(map_plot, height = 400)
@@ -304,8 +359,8 @@ server <- function(input, output, session) {
 
   ## and add the clicked countries to a list
   observe({
-    if (length(event_data("plotly_click")) == 1 & length(isolate(click_vals$dList)) < 8) {
-      d <- event_data("plotly_click")
+    if (length(click_data$e == 1) & length(isolate(click_vals$dList)) < 8 & !is.null(input$slider)) {
+      d <- click_data$e
 
       foo_curve <- d$curveNumber[1] + 1
       foo_country <- str_extract(map_r()$x$data[[foo_curve]]$text, "[^>]*$")
@@ -315,8 +370,8 @@ server <- function(input, output, session) {
         click_vals$dList <- c(isolate(click_vals$dList), foo_country)
       }
       # now if it is from the gapminder...
-    } else if (length(event_data("plotly_click")) > 1 & length(isolate(click_vals$dList)) < 8) {
-      d <- event_data("plotly_click")
+    } else if (length(click_data$e) > 1 & length(isolate(click_vals$dList)) < 8) {
+      d <- click_data$e
 
       foo_curve <- d$curveNumber[1] + 1
       foo_pointnum <- d$pointNumber[1] + 1
@@ -329,14 +384,12 @@ server <- function(input, output, session) {
     }
   })
 
-  ## clear the drilldown if the year or metric is changed (There might be a way to preserve this though)
-  observeEvent(input$slider, {
-    click_vals$dList <- NULL
-  })
-
   ## gapminder style visual, first create a reactive object
   gap_r <- reactive({
     data_gm <- pov_data_nomap %>% filter(Year == input$slider)
+
+    x_var <- names(which(metrics_sub_v == input$var_primary))
+    y_var <- names(which(metrics_sub_v == input$var_secondary))
 
     wb_plot <-
       ggplot(data_gm, aes_string(
@@ -344,10 +397,11 @@ server <- function(input, output, session) {
         y = input$var_secondary,
         text = "Country"
       )) +
-      geom_point(aes(colour = Region, size = pop_mm)) +
+      geom_point(aes(colour = Region, size = pop_mm), alpha = 0.8) +
       scale_colour_manual(values = cus_cols, na.translate = F) +
       theme_classic() +
-      theme(legend.title = element_blank())
+      theme(legend.title = element_blank()) +
+      labs(x = paste(x_var), y = paste(y_var))
 
     ggplotly(wb_plot, tooltip = c("text", "size", "colour"))
   })
@@ -362,6 +416,8 @@ server <- function(input, output, session) {
     if (length(click_vals$dList) > 0) {
       pov_data_line <- pov_data_nomap %>% filter(Country %in% click_vals$dList)
 
+      y_var_line <- names(which(metrics_sub_v == input$var_secondary))
+
       line_plot <-
         ggplot(
           pov_data_line,
@@ -371,7 +427,8 @@ server <- function(input, output, session) {
         geom_vline(xintercept = input$slider, linetype = "longdash", colour = "grey30") +
         scale_colour_manual(values = cus_cols) +
         theme_classic() +
-        theme(legend.title = element_blank())
+        theme(legend.title = element_blank()) +
+        labs(y = paste(y_var_line))
 
       ggplotly(line_plot) %>% event_unregister("plotly_click")
     } else {
@@ -386,7 +443,7 @@ server <- function(input, output, session) {
   })
 
   # table country data
-  output$clickTable <- renderTable({
+  output$clickTable <- renderFormattable({
     foo_data_table <- pov_data_nomap %>% filter(
       Country %in% click_vals$dList,
       Year == input$slider
@@ -405,21 +462,56 @@ server <- function(input, output, session) {
         "Purchase power parity" = "ppp"
       )
 
-    data_table_out
+    formattable(
+      data_table_out,
+      align = c("l", "c", "c", "c", "c", "c", "c", "c"),
+      list(
+        "Percent below poverty line" = color_tile("#E3EEF5", "#73ADCF"),
+        "Watt's index" = color_tile("#E3EEF5", "#73ADCF"),
+        "Gini index" = color_tile("#E3EEF5", "#73ADCF"),
+        "GDP per capita" = color_tile("#E3EEF5", "#73ADCF"),
+        "Life expectancy (years)" = color_tile("#E3EEF5", "#73ADCF"),
+        "Population (MM)" = color_tile("#E3EEF5", "#73ADCF"),
+        "Purchase power parity" = color_tile("#E3EEF5", "#73ADCF")
+      )
+    )
   })
 
   ## reset the drilldown
   observeEvent(input$reset_butt, {
     click_vals$dList <- NULL
+    click_data$e <- NULL
   })
 
   observeEvent(input$var_primary, {
     click_vals$dList <- NULL
+    click_data$e <- NULL
+  })
+
+  ## clear the drilldown if the year or metric is changed (There might be a way to preserve this though)
+  observeEvent(input$slider, {
+    click_vals$dList <- NULL
+    click_data$e <- NULL
+  })
+
+  ## shinyalert to display the help page
+  observeEvent(input$help, {
+    shinyalert(
+      title = "Metric info",
+      text = "Here are some simplified explanations of some of the metrics used in the dashboard.\n
+Percent below poverty line: The percent of the population below the poverty line, set at $1.90 US.\n
+Watt's Index: A distribution sensitive measure of poverty using logarithms. It adds extra weight to people in extreme poverty. Note it can behave strangely sometimes.\n
+Gini Index: A measure of inequality. A value of 0 has all the wealth distributed equally, a value of 1 has all the wealth held by one person.\n
+Purchase power parity: How much purchasing power individuals have with the local currency, compared to the US Dollar. In other words, it describes how much things would cost if being sold in the United States.",
+      type = "info",
+      size = "m",
+      closeOnClickOutside = T
+    )
   })
 
   # this is for debugging
   output$clicking <- renderPrint({
-    ## sum_dat_r()
+    # sum_dat_r()
     click_check <- event_data("plotly_click")
     click_check
   })
