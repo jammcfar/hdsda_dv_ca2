@@ -4,18 +4,36 @@
 1) Repair the join between map data and pov data DONE
 2) Reduce down map data size DONE
 3) Impute gini, median, gdp_capita, life_exp and pop DONEISH
-4) Summarise all subregions (get the median) (if this is a thing, probably is) WHAT IS THIS
+4) Summarise all subregions (get the median) (if this is a thing, probably is) ??
 5) Find out in the literature on poverty what kind of things people analyse
 
 * Background
 - An attempt to normalise global absolute poverty across different economies
 - Well researched and referenced data sources
+- Data sources
+
+  Some measures such as the Gini measurements are imperfect, really making thes best of it. https://stonecenter.gc.cuny.edu/files/2019/02/review_of_all_the_ginis_Smeeding-latner.pdf
 
 * Specification and narrative
 - Poverty over time
 - Comparisons between countries
 - The association between poverty and other metrics
+- To allow the user to explore this database easily
 
+"Expand physical limtis of what can be shown in a limited space"
+"Facilitate manipulation of data"
+"Facilitate interrogation of data"
+"Different techniques for engaging users"
+"Organise thinking" : "We want to use :w
+data adjustments and presentation adjustment for this"
+"Event" -> "Control" -> "Function" (Kirk p224)
+"Framing" Framing was used extensively. We used framing of the data, to subset out specific periods of time. Framing also was used for drilldowns
+"Navigating" Navigating was used for exploring a map and clusters of bubbles. Re-frames the data.
+"Animating" the progression of metrics over time. Both manual and automatic. Suitable for this temporal data.
+"Contributing" The user will provide contributing data alot. (Kirk p232)
+"Focussing" Used on table to visually emphasise things (p235). Also for Gapminder. And tiles.
+"Annotating" used for map and gapminder, to view more details in tooltip. And table.
+"Orientating" used in the line chart. p237
   Poverty over time?
   Poverty and urbanisation?
   Poverty and inequality?
@@ -26,8 +44,39 @@
 
 
 * Visual design process
+
+"Formulating the brief: Timescale, Setting, Format, Purpose map"
+"Editorial thinking: Angle, framing, focus"
+"Data representation: Chart types"
+"Good design: Trustworth design has fuinctional performance"
+"It is accessible in that it is useful, unobtrusive and has visual accessibility"
+"Elgent, in that it doesnt have feature creep, minmises clicks and is fun"
+
+"Composition": Relationships between elements and how they will appear
+"Project composition": Layout and hierarchy of the project
+"Chart composition": Shape, size and layout choices of the cahrts.
+How big will they be and why?
+Follows convention: Title at top, info below, main graphic takes center of screen.
+Wireframing...
+Scales
+Drilldowns sort automatically
+Trustworthy: Scales reset between metrics
+Accessible: Only one tab
+Elegent: Things are aligned
+Unity: Chart in middle brings things together(?)
+
+Annotation used to inform the viewer.
+Title gives the general idea
+Others give assistance for dashboard behaviour, to prevent surprises. It states limitations. It is not an intriduction, which would be too long. More of a help if people need it.
+Captions explain what advanced metrics mean in simple terms. Good for intended audience.
+Chart labels and legends used sparingly to minimise clutter.
+PLotly automatically provides the occasional helper annotation when the user is interacting with things.
+Sans-serif fonts.
+
+
 ** Data preprocessing
   Data was extracted using R based APIs
+- Disparate data sources caused problems when merging the countries data
 - Some compromises had to be made, owing to the dataset size.
   - Polygon counts were reduced
   - Antarctica was removed
@@ -35,7 +84,9 @@
   - Some finer data such as population deciles were dropped.
 
 Some manual hard coding was used to join up datasets. Even established codes like ISO3 can differ between datasets. X on used WB, other ISO3, still errors.
-
+* Analysis of data
+- Some aggregation used
+  
 ** Data visualisation
 Talk about composition (as in his slides) Lecture 10
 Wireframing
@@ -44,8 +95,18 @@ Wanted the chloropleth to be the primary view
 Wanted to avoid multiple tabs
 To manage the volume of possible views, users were given control over years and ...
 https://sashamaps.net/docs/resources/20-colors/
+
 * Independent visualisations (justifications)
 (for techniques, layout, style, colour)
+
+Colour is used to draw the eye when making comparisons in table and world map.
+The general blue, provides a functional harmony. Prevents it from looking too dull.
+* Results for each section
+- The world map
+- The Gapminder
+- The high level tiles
+- THe line plot
+- The summary table
 
 * Conclusions and reflections
 latency is bad https://idl.cs.washington.edu/files/2014-Latency-InfoVis.pdf

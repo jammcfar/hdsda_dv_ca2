@@ -1,107 +1,14 @@
 ### Title: povcar
 ### Author: x19175329@student.ncirl.ie
 ### Desc: r file
-library(formattable)
+
 library(tidyverse)
+library(formattable)
 library(shiny)
 library(shinydashboard)
 library(shinycssloaders)
 library(plotly)
 library(shinyalert)
-
-## this is test stuff
-pov_data <- read.csv("test_data_small.csv") %>% as_tibble()
-
-pov_data_go <- pov_data %>% filter(Year == 2000)
-
-map_plot <-
-  pov_data_go %>%
-  ggplot(aes(x = long, y = lat, group = group, text = country, fill = headcount)) +
-  geom_polygon(colour = "grey80", size = 1) +
-  scale_fill_continuous(na.value = "grey70")
-
-## plotly highlight testing
-map_plotly <- ggplotly(map_plot)
-
-s <- attrs_selected(
-  showlegend = TRUE,
-  mode = "lines+markers",
-  marker = list(symbol = "x")
-)
-
-highlight(map_plotly,
-  on = "plotly_click",
-  color = toRGB("red"),
-  selected = s
-)
-
-cus_cols <- c("#e6194B", "#3cb44b", "#4363d8", "#f58231", "#42d4f4", "#f032e6", "#800000", "#000075")
-## line chart
-pov_data %>%
-  filter(id == "Ireland") %>%
-  ggplot(aes(x = year, y = headcount, colour = id)) +
-  geom_point() +
-  geom_path() +
-  theme_classic()
-
-## gapminder
-pov_data_go %>%
-  group_by(id) %>%
-  top_n(1) %>%
-  ggplot(aes(x = gdp_capita, y = gini, colour = wb_region, size = population)) +
-  geom_point()
-
-# note curve number is position in list -1
-str_extract(map_plotly$x$data[[10]]$text, "[^<]+")
-
-
-countries_vector <- vector("character", nrow(d))
-
-for (i in 1:nrow(d)) {
-  foo_curve <- d$curveNumber[i] + 1
-  foo_country <- str_extract(plotly_test$x$data[[foo_curve]]$text, "[^<]+")
-  countries_vector[i] <- foo_country
-}
-
-pov_dat_hist <- pov_dat_go %>% filter(pov_data_go %>% countries_vector())
-
-hist(pov_dat_hist)
-
-# gapminder testing
-gap_dat_test <-
-  pov_data_go %>%
-  group_by(Country, Year) %>%
-  slice_head(n = 1)
-
-wb_plot <-
-  ggplot(gap_dat_test, aes_string(
-    x = "gdp_capita",
-    y = "gini",
-    text = "id"
-  )) +
-  geom_point(aes(colour = wb_region, size = population)) +
-  scale_colour_manual(values = cus_cols, na.translate = F)
-
-x_var <- "tester"
-y_var <- "testere"
-
-cus_cols <- c("#e6194B", "#3cb44b", "#4363d8", "#f58231", "#42d4f4", "#f032e6", "#800000", "#000075")
-wb_plot <-
-  ggplot(gap_dat_test, aes_string(
-    x = "per_pov_line",
-    y = "gini",
-    text = "Country"
-  )) +
-  geom_point(aes(colour = Region, size = pop_mm), alpha = 0.8) +
-  scale_colour_manual(values = cus_cols, na.translate = F) +
-  theme_classic() +
-  theme(legend.title = element_blank()) +
-  labs(x = paste(x_var), y = paste(y_var))
-
-plotly_test <- ggplotly(wb_plot, tooltip = c("text", "colour", "size"))
-plotly_test$x$data[[3]]
-str_extract(plotly_test$x$data[[2]]$text[16], "[^>]*$")
-plotly_test
 
 ## shiny time========================================================
 
@@ -114,57 +21,57 @@ ani_opts <-
 
 d_header <- # disabling the header is an option
   dashboardHeader(
-    title = "PovcalNet DB"
+    title = "Exploring global poverty"
   )
 
 ## set up side panel. Enable shinyalert for help popup.
 d_sidebar <-
   dashboardSidebar(
     useShinyalert(),
-    sidebarMenu(
-      menuItem("Controls", tabName = "dashboard", icon = icon("dashboard")),
-      actionButton("help",
-        "Info",
-        icon = icon("info-circle")
-      ),
-      br(),
-      sliderInput("slider", "Year:",
-        min = 1990,
-        max = 2018,
-        value = 1990,
-        sep = "",
-        animate = ani_opts
-      ),
-      selectInput(
-        "var_primary", "Primary variable:",
-        c(
-          "Precent below poverty line" = "per_pov_line",
-          "Watt's Poverty Index" = "watts",
-          "Gini Inequality Index" = "gini",
-          "Life expectancy" = "life_exp",
-          "GDP per capita" = "gdp",
-          "Purchase power parity" = "ppp"
-        )
-      ),
-      selectInput(
-        "var_secondary", "Secondary variable",
-        c(
-          "Extreme poverty %" = "per_pov_line",
-          "Watt's Poverty Index" = "watts",
-          "Gini Inequality Index" = "gini",
-          "Life expectancy" = "life_exp",
-          "GDP per capita" = "gdp",
-          "Purchase power parity" = "ppp"
-        ),
-        selected = "gini"
-      ),
-      br(),
-      actionButton(
-        "reset_butt",
-        "Clear drilldown",
-        icon = icon("trash-alt")
+    # sidebarMenu(
+    # menuItem("Controls", tabName = "dashboard", icon = icon("dashboard")),
+    actionButton("help",
+      "Info",
+      icon = icon("info-circle")
+    ),
+    br(),
+    sliderInput("slider", "Year:",
+      min = 1990,
+      max = 2018,
+      value = 1990,
+      sep = "",
+      animate = ani_opts
+    ),
+    selectInput(
+      "var_primary", "Primary variable:",
+      c(
+        "Precent below poverty line" = "per_pov_line",
+        "Watt's Poverty Index" = "watts",
+        "Gini Inequality Index" = "gini",
+        "Life expectancy" = "life_exp",
+        "GDP per capita" = "gdp",
+        "Purchase power parity" = "ppp"
       )
+    ),
+    selectInput(
+      "var_secondary", "Secondary variable",
+      c(
+        "Percent below poverty line" = "per_pov_line",
+        "Watt's Poverty Index" = "watts",
+        "Gini Inequality Index" = "gini",
+        "Life expectancy" = "life_exp",
+        "GDP per capita" = "gdp",
+        "Purchase power parity" = "ppp"
+      ),
+      selected = "gini"
+    ),
+    br(),
+    actionButton(
+      "reset_butt",
+      "Clear drilldown",
+      icon = icon("trash-alt")
     )
+    # )
   )
 
 ## Sidebar content
@@ -203,12 +110,12 @@ ui <- dashboardPage(
           solidHeader = T,
           formattableOutput("clickTable"),
           width = NULL
-        ),
-        box(
-          title = "debug",
-          verbatimTextOutput("clicking"),
-          width = NULL
-        )
+        ) # , # this is for debugging
+        # box(
+        # title = "debug",
+        # verbatimTextOutput("clicking"),
+        # width = NULL
+        # )
       )
     )
   )
@@ -221,7 +128,7 @@ server <- function(input, output, session) {
   cus_cols <- c("#e6194B", "#3cb44b", "#4363d8", "#f58231", "#42d4f4", "#f032e6", "#800000", "#000075")
 
   ## read in the data
-  pov_data <- read_csv("test_data_small.csv", col_types = "ddcccdddddddcdd") %>% as_tibble()
+  pov_data <- read_csv("test_data_small.csv", col_types = "ddcccddddddcdd") %>% as_tibble()
 
   ## transform to non-map data
   pov_data_nomap <-
@@ -354,12 +261,16 @@ server <- function(input, output, session) {
       icon = icon("arrow-alt-circle-up"), color = "blue"
     )
   })
+
+  ## observe which tab is selected
+
+
   ## save the plotly clicks to a list
   click_vals <- reactiveValues(dList = NULL)
 
   ## and add the clicked countries to a list
   observe({
-    if (length(click_data$e == 1) & length(isolate(click_vals$dList)) < 8 & !is.null(input$slider)) {
+    if (length(click_data$e == 1) & length(isolate(click_vals$dList)) < 8 & !is.null(input$slider) & input$tabset1 == "World map") {
       d <- click_data$e
 
       foo_curve <- d$curveNumber[1] + 1
@@ -383,6 +294,30 @@ server <- function(input, output, session) {
       }
     }
   })
+  # observe({
+  # if (length(click_data$e == 1) & length(isolate(click_vals$dList)) < 8 & !is.null(input$slider)) {
+  # d <- click_data$e
+  #
+  # if(input$tabset1 == "World map"){
+  #
+  # foo_curve <- d$curveNumber[1] + 1
+  # foo_country <- str_extract(map_r()$x$data[[foo_curve]]$text, "[^>]*$")
+  #
+  # } else if(input$tabset1 == "  \"Gapminder\""){
+  #
+  # foo_curve <- d$curveNumber[1] + 1
+  # foo_pointnum <- d$pointNumber[1] + 1
+  # foo_country <- str_extract(gap_r()$x$data[[foo_curve]]$text[foo_pointnum], "[^>]*$")
+  #
+  # }
+  #
+  ## only add if not already present
+  # if (!(foo_country %in% click_vals$dList)) {
+  # click_vals$dList <- c(isolate(click_vals$dList), foo_country)
+  # }
+  #
+  # }
+  # })
 
   ## gapminder style visual, first create a reactive object
   gap_r <- reactive({
@@ -502,7 +437,8 @@ server <- function(input, output, session) {
 Percent below poverty line: The percent of the population below the poverty line, set at $1.90 US.\n
 Watt's Index: A distribution sensitive measure of poverty using logarithms. It adds extra weight to people in extreme poverty. Note it can behave strangely sometimes.\n
 Gini Index: A measure of inequality. A value of 0 has all the wealth distributed equally, a value of 1 has all the wealth held by one person.\n
-Purchase power parity: How much purchasing power individuals have with the local currency, compared to the US Dollar. In other words, it describes how much things would cost if being sold in the United States.",
+Purchase power parity: How much purchasing power individuals have with the local currency, compared to the US Dollar. In other words, it describes how much things would cost if being sold in the United States.\n
+For more information and access to the raw data, visit \"http://iresearch.worldbank.org/PovcalNet/home.aspx\"",
       type = "info",
       size = "m",
       closeOnClickOutside = T
@@ -510,11 +446,15 @@ Purchase power parity: How much purchasing power individuals have with the local
   })
 
   # this is for debugging
-  output$clicking <- renderPrint({
-    # sum_dat_r()
-    click_check <- event_data("plotly_click")
-    click_check
-  })
+  # output$clicking <- renderPrint({
+  ## sum_dat_r()
+  # click_check <- event_data("plotly_click")
+  # paste(
+  # click_data$e,
+  # click_check,
+  # input$tabset1
+  # )
+  # })
 
   ## close app when closing browser tab
   session$onSessionEnded(stopApp)
@@ -522,6 +462,3 @@ Purchase power parity: How much purchasing power individuals have with the local
 
 s_dash <- shinyApp(ui, server)
 s_dash
-
-
-## formattable experiments

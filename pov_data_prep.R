@@ -141,16 +141,14 @@ dat_map <-
 
 dat_map_rounded <-
   dat_map %>%
-  select(-country, -iso2c, -pop, -countryname, -median) %>%
+  select(-country, -iso2c, -pop, -countryname, -median, -povertygap) %>%
   mutate(
     headcount = round(headcount, 4),
     gini = round(gini, 3),
     watts = round(watts, 3),
     life_exp = round(life_exp, 3),
     purchase_power_parity = round(purchase_power_parity, 3),
-    ## median = round(median, 3),
-    gdp_capita = round(gdp_capita, 3),
-    povertygap = round(povertygap, 3)
+    gdp_capita = round(gdp_capita, 3)
   )
 
 
@@ -162,7 +160,6 @@ dat_map_named <-
     Year = year,
     "ppp" = purchase_power_parity,
     "per_pov_line" = headcount,
-    "pov_gap" = povertygap,
     "watts" = watts,
     "gini" = gini,
     "pop_mm" = population,
@@ -170,5 +167,37 @@ dat_map_named <-
     "gdp" = gdp_capita,
     "life_exp" = life_exp
   )
+
+## a bunch of countries are missing region. Add in manually
+dat_map_named <-
+  dat_map_named %>%
+  mutate(Region = case_when(
+    Country == "Afghanistan" ~ "ECA",
+    Country == "United Arab Emirates" ~ "MNA",
+    Country == "The Bahamas" ~ "LAC",
+    Country == "Brunei" ~ "EAP",
+    Country == "Cuba" ~ "LAC",
+    Country == "Northern Cyprus" ~ "ECA",
+    Country == "Eritrea" ~ "SSA",
+    Country == "Falkland Islands" ~ "LAC",
+    Country == "Equatorial Guinea" ~ "SSA",
+    Country == "Greenland" ~ "ECA",
+    Country == "Cambodia" ~ "EAP",
+    Country == "Kuwait" ~ "MNA",
+    Country == "Libya" ~ "MNA",
+    Country == "New Caledonia" ~ "EAP",
+    Country == "New Zealand" ~ "EAP",
+    Country == "Oman" ~ "MNA",
+    Country == "Puerto Rico" ~ "LAC",
+    Country == "North Korea" ~ "EAP",
+    Country == "Qatar" ~ "MNA",
+    Country == "Saudi Arabia" ~ "MNA",
+    Country == "South Sudan" ~ "SSA",
+    Country == "Somaliland" ~ "SSA",
+    Country == "Somalia" ~ "SSA",
+    Country == "Republic of Serbia" ~ "ECA",
+    TRUE ~ Region
+  ))
+
 
 write_csv(dat_map_named, "test_data_small.csv")
