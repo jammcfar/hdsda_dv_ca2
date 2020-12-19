@@ -2,10 +2,30 @@
 ### Author: x19175329@student.ncirl.ie
 ### Desc: r file for creating the pov data
 
-library(tidyverse)
-library(povcalnetR)
-library(wbstats)
-library(countrycode)
+
+# convenience function to install the packages if they are not installed
+package_installer <- function(x) {
+  # find packages from vector which are not installed and save them
+  missing_pkg <- which(!package_list %in% installed.packages()[, 1])
+  # if there are any missing ones then install them, else print a message
+  if (length(missing_pkg) > 0) {
+    install.packages(package_list[missing_pkg])
+  } else {
+    print("All packages already installed!")
+  }
+}
+
+# vector of required package names, then load
+package_list <- c(
+  "tidyverse",
+  "povcalnetR",
+  "wbstats",
+  "countrycode",
+  "rworldmap",
+  "ggpubr"
+)
+
+lapply(package_list, library, character.only = T)
 
 ## import poverty data
 pov_dat <- povcalnet(
@@ -201,3 +221,55 @@ dat_map_named <-
 
 
 write_csv(dat_map_named, "test_data_small.csv")
+
+## get summary statistics for raw data
+
+dimFun <- function(x, origin, purpose, updated) {
+  c(
+    "Source" = origin,
+    "Description" = purpose,
+    "Updated" = updated,
+    "Columns" = ncol(x),
+    "Rows" = nrow(x),
+    "NAs" = sum(colSums(is.na(x)))
+  )
+}
+
+data_descs <-
+  bind_rows(
+    dimFun(pov_dat, "povcalNet API", "Poverty data", "2020"),
+    dimFun(povcal_extra, "povcalNet API", "Extra labels for poverty data", "2020"),
+    dimFun(wb_dat, "World Bank API", "World bank data from main database", "2020"),
+    dimFun(rwm_low, "rworldmap", "Coarse world map polygon data", "2016"),
+    dimFun(rworldmap::countrySynonyms, "rworldmap", "Extra labels for map data", "2016")
+  )
+
+cs_plot <- ggtexttable(x = data_descs, theme = ttheme(base_style = "light"))
+
+ggsave("raw_data_stats.png", cs_plot, units = "cm", height = 5, width = 18)
+
+## get statistics of final dataset
+final_dims <- funModeling::status(dat_map_named)
+
+final_dims$q_zeros <- NULL
+final_dims$q_na <- NULL
+final_dims$q_inf <- NULL
+
+final_dims_plot <-
+  final_dims %>%
+  mutate(
+    p_zeros = round(p_zeros * 100, 2),
+    p_na = round(p_na * 100, 2)
+  ) %>%
+  rename(
+    Variable = variable,
+    Type = type,
+    `N unique` = unique,
+    `% zeros` = p_zeros,
+    `% NAs` = p_na,
+    `% Inf` = p_inf,
+  ) %>%
+  select(1, 5, 6, 2, 3, 4) %>%
+  ggtexttable(theme = ttheme(base_style = "light"))
+
+ggsave("data_proc_plot.png", final_dims_plot, units = "cm", height = 11, width = 14)

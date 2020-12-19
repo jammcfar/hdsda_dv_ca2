@@ -1,17 +1,36 @@
-### Title: povcar
+### Title: Shiny dashboard
 ### Author: x19175329@student.ncirl.ie
-### Desc: r file
+### Desc: Builds the dashboard
 
-library(tidyverse)
-library(formattable)
-library(shiny)
-library(shinydashboard)
-library(shinycssloaders)
-library(plotly)
-library(shinyalert)
 
-## shiny time========================================================
+# convenience function to install the packages if they are not installed
+package_installer <- function(x) {
+  # find packages from vector which are not installed and save them
+  missing_pkg <- which(!package_list %in% installed.packages()[, 1])
+  # if there are any missing ones then install them, else print a message
+  if (length(missing_pkg) > 0) {
+    install.packages(package_list[missing_pkg])
+  } else {
+    print("All packages already installed!")
+  }
+}
 
+# vector of required package names, then load
+package_list <- c(
+  "tidyverse",
+  "formattable",
+  "shiny",
+  "shinycssloaders",
+  "shinydashboard",
+  "plotly",
+  "shinyalert"
+)
+
+lapply(package_list, library, character.only = T)
+
+## shiny dashboard========================================================
+
+## set up the individual components
 ani_opts <-
   animationOptions(
     interval = 4000,
@@ -21,7 +40,8 @@ ani_opts <-
 
 d_header <- # disabling the header is an option
   dashboardHeader(
-    title = "Exploring global poverty"
+    title = "Exploring global poverty",
+    titleWidth = 300
   )
 
 ## set up side panel. Enable shinyalert for help popup.
