@@ -83,7 +83,7 @@ d_sidebar <-
         "GDP per capita" = "gdp",
         "Purchase power parity" = "ppp"
       ),
-      selected = "gini"
+      selected = "life_exp"
     ),
     br(),
     actionButton(
@@ -162,7 +162,7 @@ server <- function(input, output, session) {
     y_var = c(0, 0.5, 1),
     note = c(
       NA,
-      "Click countries on the map to activate drilldowns.\nUp to 8 may be selected.\nNote that adjusting the slider or primary\nvariable will reset the drilldowns",
+      "Click countries on the world map or Gapminder to activate drilldowns.\nUp to 8 may be selected at one time.\nNote that adjusting the slider or primary\nvariable will reset the drilldowns.",
       NA
     )
   )
@@ -371,7 +371,7 @@ server <- function(input, output, session) {
     if (length(click_vals$dList) > 0) {
       pov_data_line <- pov_data_nomap %>% filter(Country %in% click_vals$dList)
 
-      y_var_line <- names(which(metrics_sub_v == input$var_secondary))
+      y_var_line <- names(which(metrics_sub_v == input$var_primary))
 
       line_plot <-
         ggplot(
@@ -458,6 +458,7 @@ Percent below poverty line: The percent of the population below the poverty line
 Watt's Index: A distribution sensitive measure of poverty using logarithms. It adds extra weight to people in extreme poverty. Note it can behave strangely sometimes.\n
 Gini Index: A measure of inequality. A value of 0 has all the wealth distributed equally, a value of 1 has all the wealth held by one person.\n
 Purchase power parity: How much purchasing power individuals have with the local currency, compared to the US Dollar. In other words, it describes how much things would cost if being sold in the United States.\n
+Please note that all measures of poverty or inequality are all estimated to some degree and some inaccuracy should be expected.
 For more information and access to the raw data, visit \"http://iresearch.worldbank.org/PovcalNet/home.aspx\"",
       type = "info",
       size = "m",
